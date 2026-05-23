@@ -40,7 +40,7 @@ def monitorar_status():
             
         time.sleep(5)
 
-@app.route('/ping', methods=['POST'])
+@app.route('/', methods=['POST'], strict_slashes=False)
 def ping():
     global ULTIMO_SINAL, DISPOSITIVO_ALERTA_DISPARADO
     dados = request.json
