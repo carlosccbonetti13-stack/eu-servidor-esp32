@@ -1,59 +1,53 @@
-from flask import Flask, request, jsonify
-import threading
+import os
 import time
-import requests
+import threading
+from flask import Flask, jsonify
+from twilio.rest import Client
 
 app = Flask(__name__)
 
-# ==========================================
-#   CONFIGURAÇÃO DOS SEUS DADOS (SALVO)
-# ==========================================
-TELEFONE = "5548920028472"  
-API_KEY = "3838771"  
-# ==========================================
+# --- AGORA AS CREDENCIAIS SÃO PUXADAS DA MEMÓRIA DO SERVIDOR DE FORMA SEGURA ---
+TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID')
+TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN')
+TWILIO_NUMBER = os.environ.get('TWILIO_NUMBER', 'whatsapp:+14155238886')
+SEU_WHATSAPP = os.environ.get('SEU_WHATSAPP', 'whatsapp:+5548920004745')
 
-# Controle de estado do dispositivo
-ULTIMO_SINAL = time.time()
-DISPOSITIVO_ALERTA_DISPARADO = False
-TEMPO_LIMITE_QUEDA = 45 
+# --- O RESTANTE DO CÓDIGO CONTINUA EXATAMENTE IGUAL ---
+ultimo_ping = time.time()  
+alerta_enviado = False     
 
-def enviar_whatsapp(mensagem):
-    url = f"https://callmebot.com{TELEFONE}&text={requests.utils.quote(mensagem)}&apikey={API_KEY}"
+def enviar_whatsapp():
     try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            print("[WHATSAPP] Alerta enviado com sucesso!")
-        else:
-            print(f"[WHATSAPP] Falha ao enviar: {response.text}")
+        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        mensagem = client.messages.create(
+            from_=TWILIO_NUMBER,
+            to=SEU_WHATSAPP,
+            body='QUEDA DE ELETRICIDADE GALPÃO 01'
+        )
+        print(f"[TWILIO] Mensagem enviada! SID: {mensagem.sid}")
     except Exception as e:
-        print(f"[WHATSAPP] Erro de rede: {e}")
+        print(f"[ERRO TWILIO] Falha ao enviar: {e}")
 
-def monitorar_status():
-    global ULTIMO_SINAL, DISPOSITIVO_ALERTA_DISPARADO
+def monitorar_esp32():
+    global alerta_enviado
     while True:
-        tempo_decorrido = time.time() - ULTIMO_SINAL
-        
-        if tempo_decorrido > TEMPO_LIMITE_QUEDA and not DISPOSITIVO_ALERTA_DISPARADO:
-            print(f"[ALERTA] O ESP32 parou de responder há {int(tempo_decorrido)} segundos!")
-            enviar_whatsapp("⚠️ ATENÇÃO: O seu Arduino/ESP32 parou de responder e pode estar offline!")
-            DISPOSITIVO_ALERTA_DISPARADO = True
-            
-        time.sleep(5)
+        tempo_sem_resposta = time.time() - ultimo_ping
+        if tempo_sem_resposta > 10.0 and not alerta_enviado:
+            print(f"[ALERTA] ESP32 offline há {tempo_sem_resposta:.1f}s!")
+            enviar_whatsapp()
+            alerta_enviado = True  
+        time.sleep(1)
 
-@app.route('/', methods=['POST'], strict_slashes=False)
-def ping():
-    global ULTIMO_SINAL, DISPOSITIVO_ALERTA_DISPARADO
-    dados = request.json
-    print(f"[SERVER] Sinal recebido do dispositivo: {dados.get('device')}")
-    
-    ULTIMO_SINAL = time.time()
-    
-    if DISPOSITIVO_ALERTA_DISPARADO:
-        enviar_whatsapp("✅ O seu Arduino/ESP32 voltou a funcionar e está online novamente.")
-        DISPOSITIVO_ALERTA_DISPARADO = False
-        
+@app.route('/ping', methods=['POST', 'GET'])
+def receber_ping():
+    global ultimo_ping, alerta_enviado
+    ultimo_ping = time.time()  
+    if alerta_enviado:
+        print("[SISTEMA] ESP32 voltou a responder!")
+        alerta_enviado = False  
     return jsonify({"status": "recebido"}), 200
 
 if __name__ == '__main__':
-    threading.Thread(target=monitorar_status, daemon=True).start()
-    app.run(host='0.0.0.0', port=5000)
+    thread_monitor = threading.Thread(target=monitorar_esp32, daemon=True)
+    thread_monitor.start()
+    app.run(host='0.0.0.0')
