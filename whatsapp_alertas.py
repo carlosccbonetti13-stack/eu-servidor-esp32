@@ -55,7 +55,7 @@ CLIENTES = {
         "contatos": [
             {
                 "nome": "Responsável 1 (eu)",
-                "whatsapp": "5548920004745",
+                "whatsapp": None,
                 "pushover": "u99uknp91h811vg6c79f6vk8yjyrqd",
             },
             {
