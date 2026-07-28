@@ -18,7 +18,7 @@ import os
 import threading
 import time
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 import whatsapp_alertas as alertas
 
@@ -36,9 +36,27 @@ def monitorar_quedas():
 @app.route("/checkin/<galpao_id>", methods=["GET", "POST"])
 def receber_checkin(galpao_id):
     """Rota que cada ESP32 de galpão chama a cada 10s, identificando seu
-    próprio galpão na URL."""
-    alertas.marcar_online(galpao_id)
-    return jsonify({"status": "recebido", "galpao": galpao_id}), 200
+    próprio galpão na URL. Aceita opcionalmente ?temp=23.5 com a última
+    leitura do sensor DS18B20."""
+    temp_str = request.args.get("temp")
+    temperatura = None
+    if temp_str is not None:
+        try:
+            temperatura = float(temp_str)
+        except ValueError:
+            temperatura = None
+
+    alertas.marcar_online(galpao_id, temperatura=temperatura)
+    return jsonify({"status": "recebido", "galpao": galpao_id, "temperatura": temperatura}), 200
+
+
+@app.route("/temperatura/<galpao_id>", methods=["GET"])
+def consultar_temperatura(galpao_id):
+    """Retorna a última temperatura conhecida desse galpão."""
+    dado = alertas.temperatura_do_galpao(galpao_id)
+    if dado is None:
+        return jsonify({"galpao": galpao_id, "temperatura": None, "mensagem": "sem leitura ainda"}), 200
+    return jsonify({"galpao": galpao_id, "temperatura": dado["valor"], "timestamp": dado["timestamp"]}), 200
 
 
 @app.route("/status_grupo/<grupo_id>", methods=["GET"])
