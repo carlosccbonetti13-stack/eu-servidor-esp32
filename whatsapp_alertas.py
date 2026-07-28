@@ -55,17 +55,17 @@ CLIENTES = {
         "contatos": [
             {
                 "nome": "Responsável 1 (eu)",
-                "whatsapp": None,
+                "whatsapp": "5548999990001",
                 "pushover": "u99uknp91h811vg6c79f6vk8yjyrqd",
             },
             {
                 "nome": "Responsável 2",
-                "whatsapp": None,
+                "whatsapp": "5548999990002",
                 "pushover": None,  # ainda não cadastrou Pushover
             },
             {
                 "nome": "Responsável 3",
-                "whatsapp": None,
+                "whatsapp": "5548999990003",
                 "pushover": None,
             },
         ],
@@ -119,6 +119,7 @@ def _telefone_e164(contato: dict):
 _lock = Lock()
 _ultimo_checkin = {}  # galpao_id -> timestamp do último checkin
 _em_queda = {}         # galpao_id -> bool (já alertamos a queda?)
+_ultima_temperatura = {}  # galpao_id -> {"valor": float, "timestamp": float}
 
 
 def _salvar_contatos_backup():
@@ -236,12 +237,17 @@ def _alertar_reestabelecido(galpao_id: str):
     print(f"[whatsapp_alertas] Alerta de RESTABELECIMENTO disparado para galpão {galpao_id}")
 
 
-def marcar_online(galpao_id: str):
-    """Chame esta função sempre que receber um checkin do ESP32 de um galpão."""
+def marcar_online(galpao_id: str, temperatura: float = None):
+    """Chame esta função sempre que receber um checkin do ESP32 de um
+    galpão. temperatura é opcional — se o ESP32 mandar o parâmetro ?temp=,
+    passe o valor aqui para guardar a última leitura."""
     with _lock:
         agora = time.time()
         estava_em_queda = _em_queda.get(galpao_id, False)
         _ultimo_checkin[galpao_id] = agora
+
+        if temperatura is not None:
+            _ultima_temperatura[galpao_id] = {"valor": temperatura, "timestamp": agora}
 
         if estava_em_queda:
             _em_queda[galpao_id] = False
@@ -249,6 +255,13 @@ def marcar_online(galpao_id: str):
     if estava_em_queda:
         _alertar_reestabelecido(galpao_id)
         twilio_alertas.resetar_escalonamento(galpao_id)
+
+
+def temperatura_do_galpao(galpao_id: str):
+    """Retorna a última temperatura conhecida desse galpão, ou None se
+    nunca recebeu leitura. Formato: {"valor": float, "timestamp": float}"""
+    with _lock:
+        return _ultima_temperatura.get(galpao_id)
 
 
 def verificar_quedas():
