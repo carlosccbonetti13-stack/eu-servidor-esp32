@@ -38,7 +38,7 @@ WHATSAPP_API_URL = f"https://graph.facebook.com/v21.0/{PHONE_NUMBER_ID}/messages
 PUSHOVER_API_TOKEN = os.environ.get("PUSHOVER_API_TOKEN", "")
 PUSHOVER_API_URL = "https://api.pushover.net/1/messages.json"
 
-TIMEOUT_SEGUNDOS = 60  # tempo sem checkin para considerar "queda"
+TIMEOUT_SEGUNDOS = 120  # tempo sem checkin para considerar "queda"
 
 # Grupos de sirene continuam configurados aqui (não fazem parte do
 # cadastro de cliente — podem cobrir vários clientes ou um subconjunto,
